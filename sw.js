@@ -7,6 +7,12 @@ const cacheMatch = async (request, preloadResponsePromise) => {
     const cachedResponse = await caches.match(request)
     if (cachedResponse) return cachedResponse
     try {
+        const preloadResponse = await preloadResponsePromise;
+        if (preloadResponse) {
+            const cache = await caches.open("v1")
+            await cache.put(request, preloadResponse.clone())
+            return preloadResponse
+        }
         const networkResponse = await fetch(request)
         const cache = await caches.open("v1")
         await cache.put(request, networkResponse.clone())
@@ -17,6 +23,7 @@ const cacheMatch = async (request, preloadResponsePromise) => {
 }
 
 self.addEventListener("install", (event) => {
+    self.skipWaiting()
     event.waitUntil(addResourcesToCache([
         "/",
         "/app.js",
@@ -30,6 +37,7 @@ self.addEventListener("install", (event) => {
 })
 
 self.addEventListener("activate", event => {
+    event.waitUntil(clients.claim().then(() => console.log("SW has claimed all the clients")))
     event.waitUntil(async () => {
         if (self.registration.navigationPreload) {
             await self.registration.navigationPreload.enable();
@@ -37,5 +45,5 @@ self.addEventListener("activate", event => {
     })
 })
 self.addEventListener("fetch", (event) => {
-    event.respondWith(cacheMatch(event.request))
+    event.respondWith(cacheMatch(event.request, event.preloadResponse))
 })
